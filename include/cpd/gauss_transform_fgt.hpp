@@ -36,49 +36,51 @@ enum FgtMethod {
     Switched,
 };
 
-/// The default fgt method
-const FgtMethod DEFAULT_FGT_METHOD = FgtMethod::DirectTree;
-/// The default switched fgt breakpoint.
-const double DEFAULT_BREAKPOINT = 0.2;
-/// The default fgt epsilon.
-const double DEFAULT_EPSILON = 1e-4;
-
 /// The Gauss transform using the fgt library.
-class GaussTransformFgt : public GaussTransform {
+template <typename M, typename V>
+class GaussTransformFgt : public GaussTransform<M, V> {
 public:
+    /// The default fgt method
+    const FgtMethod DEFAULT_FGT_METHOD = FgtMethod::DirectTree;
+    /// The default switched fgt breakpoint.
+    const typename M::Scalar DEFAULT_BREAKPOINT = 0.2;
+    /// The default fgt epsilon.
+    const typename M::Scalar DEFAULT_EPSILON = 1e-4;
+
     GaussTransformFgt()
-      : GaussTransform()
+      : GaussTransform<M, V>()
       , m_breakpoint(DEFAULT_BREAKPOINT)
       , m_epsilon(DEFAULT_EPSILON)
       , m_method(DEFAULT_FGT_METHOD) {}
 
     /// Sets the ifgt->direct-tree breakpoint.
-    GaussTransformFgt& breakpoint(double breakpoint) {
+    GaussTransformFgt<M, V>& breakpoint(typename M::Scalar breakpoint) {
         m_breakpoint = breakpoint;
         return *this;
     }
 
     /// Sets the epsilon.
-    GaussTransformFgt& epsilon(double epsilon) {
+    GaussTransformFgt<M, V>& epsilon(typename M::Scalar epsilon) {
         m_epsilon = epsilon;
         return *this;
     }
 
     /// Sets the method.
-    GaussTransformFgt& method(FgtMethod method) {
+    GaussTransformFgt<M, V>& method(FgtMethod method) {
         m_method = method;
         return *this;
     }
 
-    Probabilities compute(const Matrix& fixed, const Matrix& moving,
-                          double sigma2, double outliers) const;
+    Probabilities<M, V> compute(const M& fixed, const M& moving,
+                                typename M::Scalar sigma2,
+                                typename M::Scalar outliers) const;
 
 private:
-    std::unique_ptr<fgt::Transform> create_transform(const Matrix& points,
-                                                     double bandwidth) const;
+    std::unique_ptr<fgt::Transform<M, V>> create_transform(
+        const M& points, typename M::Scalar bandwidth) const;
 
-    double m_breakpoint;
-    double m_epsilon;
+    typename M::Scalar m_breakpoint;
+    typename M::Scalar m_epsilon;
     FgtMethod m_method;
 };
 } // namespace cpd

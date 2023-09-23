@@ -17,56 +17,72 @@
 
 #define _USE_MATH_DEFINES
 
-#include <cpd/gauss_transform_fgt.hpp>
 #include <cmath>
+#include <cpd/gauss_transform_fgt.hpp>
 
 namespace cpd {
-std::unique_ptr<GaussTransform> GaussTransform::make_default() {
-    return std::unique_ptr<GaussTransform>(new GaussTransformFgt());
+template <typename M, typename V>
+std::unique_ptr<GaussTransform<M, V>> GaussTransform<M, V>::make_default() {
+    return std::unique_ptr<GaussTransform<M, V>>(new GaussTransformFgt<M, V>());
 }
 
-Probabilities GaussTransformFgt::compute(const Matrix& fixed,
-                                         const Matrix& moving, double sigma2,
-                                         double outliers) const {
-    double bandwidth = std::sqrt(2.0 * sigma2);
-    size_t cols = fixed.cols();
-    std::unique_ptr<fgt::Transform> transform =
-        create_transform(moving, bandwidth);
+template <typename M, typename V>
+Probabilities<M, V> GaussTransformFgt<M, V>::compute(
+    const M& fixed, const M& moving, typename M::Scalar sigma2,
+    typename M::Scalar outliers) const {
+    typename M::Scalar bandwidth = std::sqrt(2.0 * sigma2);
+    typename M::Index cols = fixed.cols();
+    std::unique_ptr<fgt::Transform<M, V>> transform =
+        this->create_transform(moving, bandwidth);
     auto kt1 = transform->compute(fixed);
-    double ndi = outliers / (1.0 - outliers) * moving.rows() / fixed.rows() *
-                 std::pow(2.0 * M_PI * sigma2, 0.5 * cols);
-    Array denom_p = kt1.array() + ndi;
-    Vector pt1 = 1 - ndi / denom_p;
+    typename M::Scalar ndi = outliers / (1.0 - outliers) * moving.rows() /
+                             fixed.rows() *
+                             std::pow(2.0 * M_PI * sigma2, 0.5 * cols);
+    auto denom_p = kt1.array() + ndi;
+    V pt1 = 1 - ndi / denom_p;
     transform = create_transform(fixed, bandwidth);
-    Vector p1 = transform->compute(moving, 1 / denom_p);
-    Matrix px(moving.rows(), cols);
-    for (size_t i = 0; i < cols; ++i) {
+    V p1 = transform->compute(moving, 1 / denom_p);
+    M px(moving.rows(), cols);
+    for (typename M::Index i = 0; i < cols; ++i) {
         px.col(i) = transform->compute(moving, fixed.col(i).array() / denom_p);
     }
-    double l =
+    typename M::Scalar l =
         -denom_p.log().sum() + cols * fixed.rows() * std::log(sigma2) / 2;
     return { p1, pt1, px, l };
 }
 
-std::unique_ptr<fgt::Transform> GaussTransformFgt::create_transform(
-    const Matrix& points, double bandwidth) const {
+template <typename M, typename V>
+std::unique_ptr<fgt::Transform<M, V>> GaussTransformFgt<M, V>::create_transform(
+    const M& points, typename M::Scalar bandwidth) const {
     switch (m_method) {
         case FgtMethod::DirectTree:
-            return std::unique_ptr<fgt::Transform>(
-                new fgt::DirectTree(points, bandwidth, m_epsilon));
+            return std::unique_ptr<fgt::Transform<M, V>>(
+                new fgt::DirectTree<M, V>(points, bandwidth, m_epsilon));
         case FgtMethod::Ifgt:
-            return std::unique_ptr<fgt::Transform>(
-                new fgt::Ifgt(points, bandwidth, m_epsilon));
+            return std::unique_ptr<fgt::Transform<M, V>>(
+                new fgt::Ifgt<M, V>(points, bandwidth, m_epsilon));
         case FgtMethod::Switched:
             if (bandwidth > m_breakpoint) {
-                return std::unique_ptr<fgt::Transform>(
-                    new fgt::Ifgt(points, bandwidth, m_epsilon));
+                return std::unique_ptr<fgt::Transform<M, V>>(
+                    new fgt::Ifgt<M, V>(points, bandwidth, m_epsilon));
             } else {
-                return std::unique_ptr<fgt::Transform>(
-                    new fgt::DirectTree(points, bandwidth, m_epsilon));
+                return std::unique_ptr<fgt::Transform<M, V>>(
+                    new fgt::DirectTree<M, V>(points, bandwidth, m_epsilon));
             }
     }
     return nullptr;
 }
+
+// Here we need to instantiate all the shit :(
+template class GaussTransformFgt<Matrix, Vector>;
+template class GaussTransformFgt<MatrixF, VectorF>;
+
+std::unique_ptr<GaussTransformFgt<Matrix, Vector>> dummy2;
+std::unique_ptr<GaussTransformFgt<MatrixF, VectorF>> dummyF2;
+
+template std::unique_ptr<GaussTransform<Matrix, Vector>>
+GaussTransform<Matrix, Vector>::make_default();
+template std::unique_ptr<GaussTransform<MatrixF, VectorF>>
+GaussTransform<MatrixF, VectorF>::make_default();
 
 } // namespace cpd
